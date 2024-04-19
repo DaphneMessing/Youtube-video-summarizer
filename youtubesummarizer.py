@@ -9,7 +9,12 @@ import os
 
 def download_video(search_query):
     search = Search(search_query)
+    max_results = 10  # Limit to top 10 results
+    count = 0
+
     for video in search.results:
+        if count >= max_results:
+            break  # Stop processing after the top 10 results
         if video.length < 600:  # less than 10 minutes
             try:
                 video_to_download = video.streams.filter(progressive=True, file_extension='mp4').first()
@@ -18,6 +23,8 @@ def download_video(search_query):
                     return 'video.mp4'
             except Exception as e:
                 print(f"Failed to download {video.title}: {str(e)}")
+        count += 1
+
     return None
 
 def find_scenes(video_path):
