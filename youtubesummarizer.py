@@ -4,13 +4,11 @@ from scenedetect import VideoManager, SceneManager
 from scenedetect.detectors import ContentDetector
 from pytube.exceptions import AgeRestrictedError
 import easyocr
-from PIL import Image, ImageDraw
+import tkinter as tk
+from PIL import Image, ImageDraw, ImageTk
 import imageio
 import os
-import subprocess
-import platform
 import numpy as np
-
 
 def download_video(search_query):
     search = Search(search_query)
@@ -71,6 +69,7 @@ def extract_frames(video_path, scene_list):
             frames.append(frame_path)
     cap.release()
     return frames
+
 
 def add_watermark_and_extract_text(frames, watermark_text):
     reader = easyocr.Reader(['en'])  # Ensure the 'en' model is available.
@@ -136,15 +135,45 @@ def create_gif(frames):
 
 
 def open_gif(gif_path):
-    if os.path.exists(gif_path):
-        if platform.system() == 'Windows':
-            os.startfile(gif_path)
-        elif platform.system() == 'Darwin':  # macOS
-            subprocess.call(['open', gif_path])
-        elif platform.system() == 'Linux':
-            subprocess.call(['xdg-open', gif_path])
-    else:
+    if not os.path.exists(gif_path):
         print(f"File not found: {gif_path}")
+        return
+
+    root = tk.Tk()
+    root.title("GIF Viewer")
+
+    # Load the GIF file and setup to cycle through frames
+    gif = Image.open(gif_path)
+    frames = [ImageTk.PhotoImage(image=gif.copy().convert('RGBA'))]
+    try:
+        while True:
+            gif.seek(gif.tell() + 1)
+            frames.append(ImageTk.PhotoImage(image=gif.copy().convert('RGBA')))
+    except EOFError:
+        pass  # End of the GIF file reached
+
+    frame_count = len(frames)
+    frame_index = 0
+    label = tk.Label(root, image=frames[0])
+    label.pack()
+
+    # Update function to cycle through frames
+    def update_frame():
+        nonlocal frame_index
+        frame_index = (frame_index + 1) % frame_count
+        label.config(image=frames[frame_index])
+        root.after(100, update_frame)  # Adjust delay to control the speed of the animation
+
+    update_frame()
+
+    # Keep the window on top and regain focus
+    def keep_on_top():
+        root.attributes('-topmost', True)  # Keep on top
+        root.after(1000, keep_on_top)  # Check every 1 second
+
+    keep_on_top()
+
+    root.mainloop()
 
 def main():
     subject = input("Please enter a subject for the video: ")
@@ -154,11 +183,11 @@ def main():
         frames = extract_frames(video_path, scene_list)
         if frames:
             extracted_texts = add_watermark_and_extract_text(frames, "Daphne Messing")
-            full_text = " ".join([text.strip() for text in extracted_texts if text])  # Concatenate text, avoiding empty entries.
-            print("Combined Text from All Frames:", full_text)  # Print the concatenated text from all frames.
+            full_text = " ".join([text.strip() for text in extracted_texts if text])
+            print("Combined Text from All Frames:", full_text)
 
             create_gif(frames)
-            open_gif('summary.gif')
+            open_gif('summary.gif')  # This will now use the new Tkinter-based function
         else:
             print("No frames were extracted. Cannot proceed with GIF creation.")
     else:
