@@ -2,34 +2,36 @@ import cv2
 from pytube import Search, YouTube
 from scenedetect import VideoManager, SceneManager
 from scenedetect.detectors import ContentDetector
+from pytube.exceptions import AgeRestrictedError
 import easyocr
 from PIL import Image, ImageDraw
 import imageio
 import os
 import subprocess
 import platform
+import numpy as np
+
 
 def download_video(search_query):
     search = Search(search_query)
-    max_results = 10  # Limit to top 10 results
+    max_results = 10
     count = 0
 
     for video in search.results:
         if count >= max_results:
-            break  # Stop processing after the top 10 results
-        
+            break
         try:
-            yt = YouTube(video.watch_url)  # Get the YouTube object for more details
-            if yt.length < 600 and "live" not in yt.title.lower():  # Check if the video is less than 10 minutes and not labeled as live
-                video_to_download = video.streams.filter(progressive=True, file_extension='mp4').first()
+            yt = YouTube(video.watch_url)
+            if yt.length < 600 and "live" not in yt.title.lower():
+                video_to_download = yt.streams.filter(progressive=True, file_extension='mp4').first()
                 if video_to_download:
                     video_to_download.download(filename='video.mp4')
                     return 'video.mp4'
+        except AgeRestrictedError:
+            print(f"Skipping age-restricted video: {yt.title}")
         except Exception as e:
-            print(f"Failed to download {video.title}: {str(e)}")
-        
+            print(f"Failed to download {yt.title}: {e}")
         count += 1
-
     return None
 
 def find_scenes(video_path):
@@ -90,12 +92,48 @@ def add_watermark_and_extract_text(frames, watermark_text):
         img.save(frame)
     return all_texts
 
+
 def create_gif(frames):
     if not frames:  # Check if there are any frames
         print("No frames available to create a GIF.")
         return
-    images = [Image.open(frame) for frame in frames]
-    imageio.mimsave('summary.gif', images, duration=0.2)
+
+    max_duration = 10  # The GIF should last no more than 10 seconds.
+    max_frame_duration = 1  # Maximum duration each frame can be displayed.
+    min_frame_duration = 0.1  # Minimum duration each frame can be displayed.
+
+    number_of_frames = len(frames)
+    duration_per_frame = max_duration / number_of_frames
+
+    if duration_per_frame < min_frame_duration:
+        # Compute histograms and differences only if needed
+        histograms = []
+        differences = []
+        for frame in frames:
+            img = Image.open(frame).convert('RGB')
+            hist = np.histogram(img, bins=256)[0]
+            histograms.append(hist)
+            if len(histograms) > 1:
+                # Calculate histogram difference
+                diff = np.sum(np.abs(histograms[-1] - histograms[-2]))
+                differences.append(diff)
+
+        # Sort frames based on the amount of change they represent
+        if differences:
+            sorted_indices = np.argsort(differences)[::-1]  # Indices of frames sorted by largest change
+            selected_indices = sorted_indices[:int(max_duration / min_frame_duration)]  # Adjust number based on min duration
+            selected_frames = [frames[i] for i in sorted(selected_indices)]  # Select frames
+        else:
+            selected_frames = frames[:int(max_duration / max_frame_duration)]  # Fallback to a simpler selection
+        duration_per_frame = min_frame_duration
+    else:
+        selected_frames = frames  # Use all frames if duration per frame is acceptable
+
+    images = [Image.open(frame) for frame in selected_frames]
+    imageio.mimsave('summary.gif', images, duration=duration_per_frame)
+
+    print(f"GIF created with {len(selected_frames)} frames, each displayed for {duration_per_frame:.2f} seconds, total duration approximately {len(selected_frames) * duration_per_frame:.2f} seconds.")
+
 
 def open_gif(gif_path):
     if os.path.exists(gif_path):
