@@ -53,9 +53,17 @@ def find_scenes(video_path):
         print("No scenes detected.")
     return scene_list
 
-def extract_frames(video_path, scene_list):
+def extract_frames(video_path, scene_list, output_folder='video_frames'):
     if not scene_list:
         return []  # If no scenes are detected, return an empty list.
+
+    # Create the directory if it does not exist
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+    else:
+        #Clear the directory if you want to remove old frames
+        for file in os.listdir(output_folder):
+            os.remove(os.path.join(output_folder, file))
 
     cap = cv2.VideoCapture(video_path)
     frames = []
@@ -64,7 +72,7 @@ def extract_frames(video_path, scene_list):
         cap.set(cv2.CAP_PROP_POS_MSEC, midpoint * 1000)
         ret, frame = cap.read()
         if ret:
-            frame_path = f"frame_{start.get_frames()}.jpg"
+            frame_path = os.path.join(output_folder, f"frame_{start.get_frames()}.jpg")
             cv2.imwrite(frame_path, frame)
             frames.append(frame_path)
     cap.release()
@@ -134,7 +142,7 @@ def create_gif(frames):
     print(f"GIF created with {len(selected_frames)} frames, each displayed for {duration_per_frame:.2f} seconds, total duration approximately {len(selected_frames) * duration_per_frame:.2f} seconds.")
 
 
-def open_gif(gif_path):
+def open_gif(gif_path,loop_count=1):
     if not os.path.exists(gif_path):
         print(f"File not found: {gif_path}")
         return
@@ -153,16 +161,19 @@ def open_gif(gif_path):
         pass  # End of the GIF file reached
 
     frame_count = len(frames)
+    
     frame_index = 0
     label = tk.Label(root, image=frames[0])
+    total_frame_updates = frame_count * loop_count
     label.pack()
 
     # Update function to cycle through frames
     def update_frame():
         nonlocal frame_index
-        frame_index = (frame_index + 1) % frame_count
-        label.config(image=frames[frame_index])
-        root.after(100, update_frame)  # Adjust delay to control the speed of the animation
+        frame_index += 1
+        if frame_index < total_frame_updates:  # Check if the total frame updates limit has been reached
+            label.config(image=frames[frame_index % frame_count])
+            root.after(100, update_frame)  # Schedule the next frame update
 
     update_frame()
 
@@ -187,7 +198,7 @@ def main():
             print("Combined Text from All Frames:", full_text)
 
             create_gif(frames)
-            open_gif('summary.gif')  # This will now use the new Tkinter-based function
+            open_gif('summary.gif', loop_count=1)  #display the GIF only once
         else:
             print("No frames were extracted. Cannot proceed with GIF creation.")
     else:
