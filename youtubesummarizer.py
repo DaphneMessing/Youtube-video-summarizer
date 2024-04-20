@@ -71,17 +71,24 @@ def extract_frames(video_path, scene_list):
     return frames
 
 def add_watermark_and_extract_text(frames, watermark_text):
-    reader = easyocr.Reader(['en'])
+    reader = easyocr.Reader(['en'])  # Ensure the 'en' model is available.
+    all_texts = []
     for frame in frames:
         img = Image.open(frame)
         results = reader.readtext(frame)
         extracted_text = " ".join([result[1] for result in results])
-        print(f"Text found in {frame}: {extracted_text}")  # Print detected text to console
-
+        # Normalize spaces within the extracted text.
+        extracted_text = ' '.join(extracted_text.split())
+        if extracted_text:
+            print(f"Text found in {frame}: {extracted_text}")  # Print text found in the current frame.
+            all_texts.append(extracted_text)  # Store the extracted text for later concatenation.
+        else:
+             all_texts.append("")  # Append an empty string if no text was found.
         draw = ImageDraw.Draw(img)
         width, height = img.size
-        draw.text((width - 110, height - 30), watermark_text, fill=(255,255,255))  # Add watermark
+        draw.text((width - 110, height - 30), watermark_text, fill=(255, 255, 255))
         img.save(frame)
+    return all_texts
 
 def create_gif(frames):
     if not frames:  # Check if there are any frames
@@ -108,7 +115,10 @@ def main():
         scene_list = find_scenes(video_path)
         frames = extract_frames(video_path, scene_list)
         if frames:
-            add_watermark_and_extract_text(frames, "Daphne Messing")
+            extracted_texts = add_watermark_and_extract_text(frames, "Daphne Messing")
+            full_text = " ".join([text.strip() for text in extracted_texts if text])  # Concatenate text, avoiding empty entries.
+            print("Combined Text from All Frames:", full_text)  # Print the concatenated text from all frames.
+
             create_gif(frames)
             open_gif('summary.gif')
         else:
