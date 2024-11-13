@@ -41,7 +41,7 @@ This project is a Python program that summarizes YouTube videos on a given subje
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/your-username/youtube-video-summarizer.git
+   git clone https://github.com/DaphneMessing/Youtube-video-summarizer.git
    ```
 2. Install the required Python libraries:
    ```bash
